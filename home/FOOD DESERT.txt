@@ -1,0 +1,157 @@
+Data Engineering Capstone Project
+Identifying Food Desert Areas in Buffalo
+
+**Overview**
+This project serves as an open source contribution to CODE FOR AMERICA / CODE FOR BUFFALO PROJECT https://github.com/CodeForBuffalo/food_desert/blob/master/README.md
+Food Desert accoring to USDA means “limited access to grocery stores and other sources of healthy food”. This project acts as an analysis tool that can serve as a 
+starting point to identify those areas and show the nearest food source in or around the area. It will also pinpoint any residential or urban renewable vacant land 
+to propose an idea of greenhood or urban farms where a fresh produce can be planted in those places.
+
+**Data**
+the provided data was sourced from OpenDataNYC https://data.buffalony.gov/ Two data sets were used. 
+1. Retail Food Stores in NYC Dataset
+2. Assessments Lands around NYC Dataset
+
+Data Type: csv 
+Data Size: Rows >> 123.2K, Columns >> 61
+Data Types: Varied between String, Numerical, and Location 
+
+**Analysis**
+All analysis were done using Pandas + Python. 
+* Loading the csv from s3 into the workspace and turning it into dataframe. 
+* Extracting subset was related to any store , vacant land at or around Erie County.
+* Analyze the subset to reflect only data within certin zip code
+
+Data Dictionary
+
+county                         object
+license_number                  int64
+operation_type                 object
+establishment_type             object
+entity_name                    object
+dba_name                       object
+street_number                  object
+street_name                    object
+city                           object
+state                          object
+zip_code                        int64
+square_footage                  int64
+location                       object
+latitude                      float64
+longitude                     float64
+property_class                  int64
+property_class_description     object
+owner1                         object
+address                        object
+city                           object
+state                          object
+zip_code                        int64
+latitude                      float64
+longitude                     float64
+mail                           object
+
+
+Exploring and Assessing the Data
+
+Exploring and cleaning the data was the crutial stage for this . Since we are working with unstructured data, 
+I had rebuild a clean subset of data   that will enable me build a proper data model. Here are a couple of scenarios that I came across 
+while wrangling the data with Pandas.
+
+1. Column names have space 
+2. The data is collected for all NYC areas: Created a subset that are particular to Buffalo, using CITY, COUNTY, ZIPCODE. 
+3. There are Null Values: This part was weighted based on longitude and latitude areas. As I am dealing with semi geolocation data, 
+I wanted to make sure every row has longitude and latitude, and delete it if it is = NaN.
+4. Drop Any duplicated columns or unrelated to the analysis. 
+5. Remove the extra space attached to the values. Eg: city value came as '     BUFFALO' to be 'BUFFALO'
+6. Remove any special charecter in data. Eg: Location has \n, so had to take it off and create new columns for longitude and latitude. 
+After the assesment completed, Saved this subset into CSV file and uploaded it to s3 bucket. 
+
+
+**Data Model**
+
+I chose Star Schema to be my data model, because I am using two datasets that have longitude and latitude in common. Fact table contains the keys to associated dimension tables. it contains all the possible measurment and facts to locate a food desert area in Buffalo, based on the number of aggregated stores within that area. Each store will be tagged with license number and zipcode that locate its place.
+
+Fact Table.. Food Desert Column Names:
+
+license_number: Identifies what type of store is this.
+city, county, state, zip_code: All those entities complete a particular location of the store.
+dba_name: the commerical name of the store. “Doing business as” (DBA) name for the licensed entity
+square_footage: the aproximate space of the store.
+Dimension Tables.. The dimension tables contain descriptive information about the numerical values in the fact table.
+
+License Dimension Column Names:
+
+License number: which identify the licene of a particular store
+operation_type: The type of operation the licensed entity conducts, for this dataset, it is all stores.
+establishment_type: The establishment type for the licensed entity at this location; search for NYSDAM_RetailFoodStoresEstablishmentTypeCodes.pdf
+entity_name: The name of the licensed entity (name of the store proffissonally)
+Store Location Dimension Column Names:
+
+Location: contain address, city, state and longitude + latitude of a speicifc store in Buffalo and its near neighbours.
+zip_code: which identifies each city in buffalo, There are around 20 zipcodes [4201, 14202, 14203, 14204, 14206, 14207, 14208, 14209, 14210, 14211..] will be used to locate a particular store.
+lanitude, latitude: used for geolocation. Please use this map for an interactive location of the retail store. https://data.ny.gov/Economic-Development/Retail-Food-Stores-Map/p2dn-xhaw
+Vacant Land Dimension Column Names:
+
+property_type: Property Type Classification Codes describe the primary use of each parcel of real property, in our case we filtered it only to vacant land which is 311.
+property_class_description: A description of the primary use of each parcel of real property. Residentila, industrial, commerical, park lot, gas station..etc.
+owner1: The owner of a parcel of real propertyt, sometimes an indivisual, sometimes an orgnization name.
+city,address,state: Gives the address of this vacant land.
+Vland location Dimension Column Names:
+
+address, zip_code: will give the specific district and city of this vacant land
+longitude, latitude: used for geolocation purposes.
+3.2 Mapping Out Data Pipelines
+List the steps necessary to pipeline the data into the chosen data model
+
+In conclusion to this data exploration and alteration. I decided to move with star schema model, that will join two csv the vacant land and the food store one, BASED ON THE ZIPCODE, CITY, COUNTY.
+
+
+**Run ETL to Model the Data**
+Food Desert ETL will contain three files
+food_desert_ETL.py >> will have the main loading after connecting to the redshift. 
+food_create_database.py >> will execute the creation of database (food_desert_sqlqueries.py) and copy data to staging.
+
+Commands:
+python3 food_create_database.py
+python3 food_desert_ETL.py
+
+food_warehouse.cfg >> will contain the creds to amazon s3 and redshift 
+
+
+Why I chose the current technologies?
+
+There are multiple technologies will be integrated to this project in the future. The main goal was to identidy the food desert area and how can we introduce one solution that will mitigate the issue and bring the awarness to those who are in food industry to look at it as a serious issue, However a live website need to be integrated to this redshift in order to take advantage of this project. I chose normal panda wrangling and eliminated usage of Spark in this project, because the data weren't huge. A point that I would do better in future is collecting the proper data to resolve this problem, although the provided csv included multiple sets of Buffalo, but we still need to have a complete overview of the whole city in order to resolve this issue. Having that said, Airflow wasn't introduced here because our data wasn't often updated that we needed to automate it. Choosing Redshift as a data warehouse because my project is heavy on loading the data from s3 to Redshift and Redshift has Massively Parallel Processing (MPP) Architecture which allows you to load data at blazing fast speed.Choosing star schema to orgnize the data because that helped elimnating data redundancy by seperating data into multiple tables. It also represented an easy and simple structure of data, lastly Online transaction processing (OLTP) systems are used for lightning-fast queries which is the goal for this project. I also tend to use fewer joins which makes it optimized for querying large data sets.Due to the size of the data I have currently using Pandas made more sense because my data size is limited, and I don't need to scale and preformed on a single server. 
+
+
+When the data was increased by 100x, do you store the data in the same way? If your project is heavy on reading over writing, how do you store the data in a way to meet this requirement? What if the requirement is heavy on writing instead?
+
+I would still use S3 + Redshift(with multiple nodes and clusters) RDBMS as a data warehouse when this project accumelates more data, and Use a Single COPY Command to Load from Multiple Files.Because the COPY command leverages the Amazon Redshift massively parallel processing, better than the INSERT command. With the amount of data we will need to process, it is probably better to split those data into multiple file stored in Amazon S3, operates the COPY command on it and load it in Redshift. The COPY command loads the data in parallel from multiple files, dividing the workload among the nodes in your cluster. When you load all the data from a single large file, Amazon Redshift is forced to perform a serialized load, which is much slower. Split the load data files so that the files are about equal size. Although the data is huge, but it is still doesn't require an RDBMS as a storage 
+
+
+How do you run this pipeline on a daily basis by 7 am every day. What if the dag fails, how do you update the dashboard? Will the dashboard still work? Or will you populate the dashboard by using last day?
+
+Create a Dag argument that will have schedule_interval to run the ETL @daily at 7 p.m. The DAG runs have a state associated to them (running, failed, success) and informs the scheduler on which set of schedules should be evaluated for task submissions. So, if the task failed it will inform the schedular, in this case the dashboard will not populate any new thing, instead it will show the old infos and the scheduler will try to figure out the failure and adjust the start time of this task. 
+
+DAG(
+   dag_id='dag_id',
+   # start date:28-03-2017
+   start_date= datetime(year=2019, month=11, day=2),
+   # run this dag at 7; 00 am interval from 00:00 11-02-2019
+   schedule_interval='00 7 * * *')
+
+How do you make your database could be accessed by 100+ people? Can you come up with a more cost-effective approach? Does your project need to support 100+ connection at the same time?
+
+Enabling  JDBC URL or ODBC URL driver on redshift will enable the secure connectivity to redshift and thus to our database, Yet there are multiple of factors need to consider befote enabling those API Protocoles. First The amount of people connecting, queries will be preformed on the database, what if it get stuck due to multiple connectivity and it refuses the connection of other users, therefore we will be usig Connection Pool, Connection pooling funnels client connections into a pooling application, which reduces the number of processes a database has to handle at any given time. The pooling application passes on a limited number of connections to the database and queues additional connections for delivery when space becomes available.  Connection Piil lets us manage how many processes are available to each database within a cluster. By using multiple connection pools with different process limits, you can prioritize databases based on their requirements.Since we are using postgres, we will be using PgBouncer as a connection pool. 
+
+Data Quality Checks
+1. I used Pandas to check for the Null values and delete the coumns which werent adding up to the anlysis. such as the address3, address4 
+2. I used postgres to ensure queries run for data quality as follow:
+    quality_count_vland = (""" Select count(*) tablecount from staging_vland;""")
+    quality_count_food_desert = (""" Select count(*) tablecount from staging_foods_desert;""")
+    quality_vland_queries = (""" Select langitude, latitude from staging_vland;""")
+    quality_food_desert_queries = (""" Select langitude, latitude from staging_foods_desert;""")
+
+Data sets used:
+Since my project is about Buffalo Food desert, those two sets were the only datasets found to be analyzed, and both of them were only avilable is CSV
+I used two data sets which are 
+Retail_Food_Stores_Baffulo.csv and Vacant_land_Buffalo.csv
